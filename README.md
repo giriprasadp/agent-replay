@@ -1,127 +1,230 @@
-# Agent Replay — Claude Desktop Session Replay
+# Agent Replay
 
-See exactly what Claude Desktop did for each task — which files it read or wrote, what it searched for, and which shell commands it ran — in a local replay UI.
+See exactly what Claude Desktop does behind the scenes — which files it read, which files it wrote, what it searched for, and which shell commands it ran — replayed step by step in a local UI.
 
-```
-Claude Desktop
-    └── MCP server (mcp_server.py)
-            ├── read_file("src/auth.py")      → logged ✅
-            ├── web_search("jwt expiry bug")   → logged ✅
-            ├── write_file("src/auth.py", …)   → logged ✅
-            └── bash("pytest tests/")          → logged ✅
-                           ↓
-              http://127.0.0.1:8787   (replay UI)
+![Trace view showing file reads, web search, and bash spans]
+
+---
+
+## What it looks like
+
+Every session shows a timeline of steps:
+
+| Icon | Type | What you see |
+|---|---|---|
+| `READ` | File read | Path + content preview |
+| `EDIT` | File write | Path + new content preview |
+| `NEW` | File create | Path + content |
+| `WEB` | Web search | Query + result titles and snippets |
+| `BASH` | Shell command | Command + exit code + stdout |
+
+---
+
+## Prerequisites
+
+- Python 3.10 or later (no pip installs needed — stdlib only)
+- Claude Desktop installed and running
+- Git
+
+---
+
+## Step 1 — Clone the repo
+
+```bash
+git clone https://github.com/giriprasadp/agent-replay.git
+cd agent-replay
 ```
 
 ---
 
-## Quick Start (demo, no Claude Desktop needed)
+## Step 2 — Start the collector
+
+The collector is the local server that receives spans from the MCP server and serves the UI.
 
 ```bash
-# Terminal 1 — start the collector + UI server
 python3 collector.py
+```
 
-# Terminal 2 — run the demo (simulates a coding session)
+You should see:
+
+```
+Agent Replay running at http://127.0.0.1:8787
+SQLite database: /path/to/agent-replay/agent_replay.sqlite3
+```
+
+Leave this running in a terminal. Open **http://127.0.0.1:8787** — it will say "no sessions yet."
+
+---
+
+## Step 3 — Run the demo (no Claude Desktop needed)
+
+This simulates a full coding session so you can see what the UI looks like before connecting Claude Desktop.
+
+Open a second terminal:
+
+```bash
 python3 example_agent.py
 ```
 
-Open **http://127.0.0.1:8787** — you will see a session called "Fix JWT token expiry bug" with file reads, a web search, a file write, bash commands, and a new test file being created.
+Refresh **http://127.0.0.1:8787**. You will see a session called **"Fix JWT token expiry bug"** with:
+
+- 2 file reads (`sample_project/auth.py`, `sample_project/config.py`)
+- 1 web search with 3 results
+- 1 file write (patched `auth.py`)
+- 2 bash commands (running pytest)
+- 1 file create (new regression test)
+
+Click any step to see the full input and output in the right panel.
 
 ---
 
-## Connect Claude Desktop
+## Step 4 — Connect Claude Desktop
 
-**1. Find your config file**
+### Find your config file
 
 | OS | Path |
 |---|---|
-| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
-| Linux | `~/.config/Claude/claude_desktop_config.json` |
+| **macOS** | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| **Windows** | `%APPDATA%\Claude\claude_desktop_config.json` |
+| **Linux** | `~/.config/Claude/claude_desktop_config.json` |
 
-**2. Add the MCP server block**
+### Add the MCP server
+
+Open the config file and add (or merge into) the `mcpServers` block:
 
 ```json
 {
   "mcpServers": {
     "agent-replay": {
       "command": "python3",
-      "args": ["/FULL/PATH/TO/agent-session-replay-demo/mcp_server.py"]
+      "args": ["/FULL/PATH/TO/agent-replay/mcp_server.py"]
     }
   }
 }
 ```
 
-Replace the path with the absolute path on your machine.
+**Replace `/FULL/PATH/TO/agent-replay/`** with the actual absolute path where you cloned the repo.
 
-**3. Restart Claude Desktop**
-
-The tools `read_file`, `write_file`, `create_file`, `bash`, and `web_search` are now available to Claude. Every call is logged and visible in the replay UI.
-
-**4. Make sure the collector is running**
+To find it:
 
 ```bash
-python3 collector.py
+# macOS / Linux
+pwd
+# e.g. /home/yourname/projects/agent-replay
+
+# Windows (in PowerShell)
+Get-Location
+# e.g. C:\Users\yourname\projects\agent-replay
 ```
 
-Open **http://127.0.0.1:8787**. Use Claude Desktop normally. Each new conversation that uses a tool will appear as a session after Claude makes its first tool call.
+### Windows example
+
+```json
+{
+  "mcpServers": {
+    "agent-replay": {
+      "command": "python3",
+      "args": ["C:\\Users\\yourname\\projects\\agent-replay\\mcp_server.py"]
+    }
+  }
+}
+```
 
 ---
 
-## What You Can See
+## Step 5 — Restart Claude Desktop
 
-| Span | Icon | What it shows |
-|---|---|---|
-| File read | `READ` | Path, file size, content preview |
-| File write | `EDIT` | Path, bytes written, new content preview |
-| File create | `NEW` | Path, bytes written, new content preview |
-| Web search | `WEB` | Query, result titles + snippets |
-| Bash command | `BASH` | Command, exit code, stdout, stderr |
+Fully quit and reopen Claude Desktop. The MCP server must be picked up on startup.
 
-**Filter tabs** in the trace panel: All · Files · Search · Bash · Errors
+To verify it connected: in Claude Desktop, ask:
+
+> "What tools do you have available?"
+
+Claude should list `read_file`, `write_file`, `create_file`, `bash`, and `web_search`.
 
 ---
 
-## What You Cannot See
+## Step 6 — Use Claude Desktop normally
 
-Claude Desktop's MCP interface does not expose LLM internals. The following are **not** available from this tool:
+Give Claude a real task that involves files, for example:
 
-- Token counts or context window usage
-- Dollar cost per call
-- Internal chain-of-thought or reasoning
-- Tool calls made by Claude's built-in native tools (only calls through this MCP server are logged)
+> "Read my README.md and suggest improvements"
+
+> "Search for how to add dark mode to a CSS file, then apply it to styles.css"
+
+> "Run the tests and fix any failures"
+
+Every tool call Claude makes goes through `mcp_server.py` and is logged.
 
 ---
 
-## Session Management
+## Step 7 — Open the replay UI
 
-A new replay session is created when there is more than **10 minutes** of inactivity between tool calls. Session state is stored in `~/.agent_replay_mcp_state.json`.
+Go to **http://127.0.0.1:8787**
+
+- The left panel shows all sessions (one per conversation, grouped by 10-minute inactivity windows)
+- The middle panel shows the trace — every step Claude took, in order
+- The right panel shows the full input and output for the selected step
+
+Use the filter tabs to focus:
+- **Files** — only file reads, writes, and creates
+- **Search** — only web searches
+- **Bash** — only shell commands
+- **Errors** — only steps that failed
+
+---
+
+## Session management
+
+A new session is created automatically when there is more than **10 minutes** of inactivity between tool calls.
 
 To force a new session immediately:
 
 ```bash
+# macOS / Linux
 rm ~/.agent_replay_mcp_state.json
+
+# Windows (PowerShell)
+Remove-Item "$env:USERPROFILE\.agent_replay_mcp_state.json"
 ```
 
 ---
 
-## Other Recording Methods
+## What you can and cannot see
 
-**CLI wrapper** — records the visible terminal output of any CLI tool:
+| | Visible |
+|---|---|
+| Which files Claude read | ✅ |
+| Which files Claude wrote or created | ✅ |
+| Web search queries and results | ✅ |
+| Shell commands and their output | ✅ |
+| Timing for each step | ✅ |
+| LLM token count / cost | ❌ (not exposed by Claude Desktop MCP) |
+| Claude's internal reasoning | ❌ (stays on Anthropic's servers) |
+| Tool calls via Claude Desktop's built-in native tools | ❌ (only calls through this MCP server are captured) |
+
+---
+
+## Other ways to record
+
+### Record a Claude Code CLI session
+
+Wraps the terminal and logs everything visible:
 
 ```bash
 python3 record_cli.py -- claude
-python3 record_cli.py -- bash
 ```
 
-**Browser extension** — records visible messages from claude.ai or chatgpt.com:
+### Record claude.ai or ChatGPT in the browser
 
-1. Open `chrome://extensions`, enable Developer mode
-2. Click "Load unpacked", select the `browser-extension/` folder
-3. Keep `python3 collector.py` running
-4. Chat on claude.ai or chatgpt.com — messages appear in the replay UI
+1. Open `chrome://extensions` in Chrome or Edge
+2. Enable **Developer mode**
+3. Click **Load unpacked** → select the `browser-extension/` folder
+4. Make sure `python3 collector.py` is running
+5. Open claude.ai or chatgpt.com and chat normally
+6. Open http://127.0.0.1:8787 to see the captured messages
 
-**Python SDK** — instrument your own agent code with full visibility:
+### Instrument your own Python agent
 
 ```python
 from agentreplay import ReplayClient
@@ -129,9 +232,9 @@ from agentreplay import ReplayClient
 replay = ReplayClient()
 
 with replay.session("My task", input={"user": "dev-42"}):
-    src = replay.read_text("src/app.py")
-    results = replay.web_search("how to fix X", results=fetched_results)
-    replay.file_write("src/app.py", fixed_src)
+    src  = replay.read_text("src/app.py")
+    hits = replay.web_search("how to fix X", results=results)
+    replay.file_write("src/app.py", fixed)
     replay.bash(["pytest", "tests/"])
     replay.file_create("tests/test_regression.py", test_code)
 ```
@@ -140,12 +243,13 @@ with replay.session("My task", input={"user": "dev-42"}):
 
 ## Files
 
-| File | Purpose |
+| File | What it does |
 |---|---|
-| `mcp_server.py` | MCP server — plug into Claude Desktop |
+| `mcp_server.py` | MCP server — connects to Claude Desktop |
 | `collector.py` | Local HTTP server + SQLite store + UI server |
-| `index.html` | Replay UI |
+| `index.html` | Replay UI (served by collector.py) |
 | `agentreplay.py` | Python SDK for direct instrumentation |
 | `record_cli.py` | Terminal session recorder |
 | `example_agent.py` | Demo: simulates a coding session |
 | `browser-extension/` | Chrome/Edge extension for claude.ai / ChatGPT |
+| `sample_project/` | Sample files used by the demo |
