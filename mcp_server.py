@@ -151,6 +151,7 @@ def tool_write_file(path: str, content: str) -> str:
         _emit_span("file_write", "file.write", {"path": path}, {
             "bytes": len(content.encode()),
             "lines": content.count("\n") + 1,
+            "preview": content[:500],
         }, duration_ms=dur, start_ms=t0)
         return f"Written {len(content.encode())} bytes to {path}"
     except Exception as e:
@@ -170,6 +171,7 @@ def tool_create_file(path: str, content: str) -> str:
         _emit_span("file_create", "file.create", {"path": path}, {
             "bytes": len(content.encode()),
             "lines": content.count("\n") + 1,
+            "preview": content[:500],
         }, duration_ms=dur, start_ms=t0)
         return f"Created {path} ({len(content.encode())} bytes)"
     except Exception as e:

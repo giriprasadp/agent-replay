@@ -230,29 +230,29 @@ class ReplayClient:
         self._wrapped.add(key)
 
     def read_text(self, path: str, encoding: str = "utf-8") -> str:
-        with self.span("file_read", "file.read", input={"path": path}) as span:
+        with self.span("file_read", "file.read", subtitle=path, input={"path": path}) as span:
             with open(path, "r", encoding=encoding) as f:
                 data = f.read()
             span.output = {"bytes": len(data.encode(encoding)), "lines": data.count("\n") + 1, "preview": data[:500]}
             return data
 
     def file_write(self, path: str, content: str, encoding: str = "utf-8"):
-        with self.span("file_write", "file.write", input={"path": path}) as span:
+        with self.span("file_write", "file.write", subtitle=path, input={"path": path}) as span:
             with open(path, "w", encoding=encoding) as f:
                 f.write(content)
-            span.output = {"bytes": len(content.encode(encoding)), "lines": content.count("\n") + 1}
+            span.output = {"bytes": len(content.encode(encoding)), "lines": content.count("\n") + 1, "preview": content[:500]}
 
     def file_create(self, path: str, content: str, encoding: str = "utf-8"):
         import os as _os
         if _os.path.exists(path):
             raise FileExistsError(f"{path} already exists")
-        with self.span("file_create", "file.create", input={"path": path}) as span:
+        with self.span("file_create", "file.create", subtitle=path, input={"path": path}) as span:
             with open(path, "w", encoding=encoding) as f:
                 f.write(content)
-            span.output = {"bytes": len(content.encode(encoding)), "lines": content.count("\n") + 1}
+            span.output = {"bytes": len(content.encode(encoding)), "lines": content.count("\n") + 1, "preview": content[:500]}
 
     def web_search(self, query: str, results: list | None = None) -> list:
-        with self.span("web_search", "web.search", input={"query": query}) as span:
+        with self.span("web_search", "web.search", subtitle=query[:120], input={"query": query}) as span:
             output = results or []
             span.output = {"query": query, "results": output, "count": len(output)}
             return output
