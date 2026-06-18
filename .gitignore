@@ -1,0 +1,22 @@
+# SQLite database (local data, not for sharing)
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
+# MCP session state (local per-machine)
+.agent_replay_mcp_state.json
+~/.agent_replay_mcp_state.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Replay</title>
+  <style>
+    :root{--bg:#f6f7f9;--panel:#fff;--line:#dbe1e8;--strong:#c7d0da;--text:#17202a;--muted:#64748b;--accent:#0f766e;--soft:#d9f3ef;--bad:#b42318;--badsoft:#fee4e2;--warn:#b54708;--warnsoft:#fef0c7;--ok:#067647;--oksoft:#dcfae6;--code:#101828}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+    .shell{display:grid;grid-template-columns:300px minmax(360px,1fr) minmax(380px,42vw);min-height:100vh}
+    .panel{min-width:0;background:var(--panel);border-right:1px solid var(--line)}.panel:last-child{border-right:0}
+    .topbar{height:64px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:2}
+    .brand{display:flex;gap:10px;align-items:center;min-width:0}
+    .mark{display:grid;place-items:center;width:34px;height:34px;border-radius:8px;background:var(--text);color:white;font-weight:800;font-size:12px}
+    .title{font-size:14px;font-weight:780;margin:0;line-height:1.2}
+    .sub{font-size:12px;color:var(--muted);margin:2px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .search{padding:14px;border-bottom:1px solid var(--line)}
+    input{width:100%;height:38px;border:1px solid var(--strong);border-radius:8px;padding:0 11px;font:inherit}
+    .list,.tracebody,.details{overflow:auto}
+    .list{height:calc(100vh - 119px);padding:10px}
+    .tracebody{height:calc(100vh - 161px);padding:16px 18px 28px}
+    .details{height:calc(100vh - 64px);padding:18px}
+    button{font:inherit;cursor:pointer}
+    .session,.span{width:100%;text-align:left;border:1px solid transparent;background:transparent;border-radius:8px}
+    .session{padding:12px;margin-bottom:8px}.session:hover,.span:hover{background:#f7f9fb}
+    .session.active,.span.active{background:var(--soft);border-color:#7dd3c7}
+    .row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+    .name{font-size:13px;font-weight:760;margin:0;line-height:1.3}
+    .meta{font-size:12px;color:var(--muted);margin:5px 0 0;line-height:1.35}
+    .pill{display:inline-flex;align-items:center;min-height:22px;padding:0 8px;border-radius:999px;font-size:11px;font-weight:760;white-space:nowrap}
+    .failed{background:var(--badsoft);color:var(--bad)}.ok{background:var(--oksoft);color:var(--ok)}.warn{background:var(--warnsoft);color:var(--warn)}
+    .metrics{display:grid;grid-template-columns:repeat(4,minmax(82px,1fr));gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);background:#fbfcfd}
+    .metric{border:1px solid var(--line);border-radius:8px;padding:10px;background:#fff;min-width:0}
+    .label{font-size:11px;font-weight:760;text-transform:uppercase;color:var(--muted)}
+    .value{margin-top:5px;font-size:18px;font-weight:800;overflow-wrap:anywhere}
+    .tabs{display:flex;gap:6px;align-items:center;height:47px;padding:0 18px;border-bottom:1px solid var(--line)}
+    .tab{height:31px;border:1px solid transparent;background:transparent;border-radius:8px;padding:0 10px;color:var(--muted);font-size:13px;font-weight:720}
+    .tab.active{border-color:var(--strong);background:#f8fafc;color:var(--text)}
+    .textbtn,.iconbtn{height:34px;border:1px solid var(--strong);background:#fff;border-radius:8px;font-weight:700}
+    .textbtn{padding:0 12px;font-size:13px}.iconbtn{width:36px}
+    .span{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:10px;padding:9px 10px;margin:2px 0}
+    .indent1{margin-left:28px;width:calc(100% - 28px)}.indent2{margin-left:56px;width:calc(100% - 56px)}.indent3{margin-left:84px;width:calc(100% - 84px)}
+    .ico{width:32px;height:28px;border-radius:6px;background:#eef2f6;display:grid;place-items:center;font-size:10px;font-weight:800;letter-spacing:-.3px;color:#475569}
+    .ico.file_read{background:#eff6ff;color:#1d4ed8}.ico.file_write{background:#fef3c7;color:#92400e}.ico.file_create{background:#f0fdf4;color:#15803d}
+    .ico.web_search{background:#fdf4ff;color:#7e22ce}.ico.bash{background:#f1f5f9;color:#334155}
+    .ico.llm{background:#fff7ed;color:#c2410c}.ico.agent{background:#17202a;color:#fff}
+    .span-title{display:flex;gap:8px;align-items:center;min-width:0}
+    .span-name{font-size:13px;font-weight:760;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .bar{height:5px;margin-top:8px;border-radius:999px;background:#e8edf2;overflow:hidden}
+    .fill{height:100%;background:var(--accent)}
+    .time{font-size:12px;color:var(--muted);font-weight:720;white-space:nowrap}
+    .card{border:1px solid var(--line);border-radius:8px;background:#fff;margin-bottom:14px;overflow:hidden}
+    .card header{padding:12px 14px;border-bottom:1px solid var(--line);background:#fbfcfd;display:flex;justify-content:space-between;gap:10px}
+    .card h2{font-size:13px;margin:0}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}
+    .kv{background:#fff;padding:12px 14px;min-width:0}.kvv{margin-top:4px;font-size:13px;font-weight:720;overflow-wrap:anywhere}
+    .code{margin:0;max-height:360px;overflow:auto;background:var(--code);color:#edf2f7;padding:14px;font:12px/1.55 "SFMono-Regular",Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+    .path-highlight{font-family:"SFMono-Regular",Consolas,monospace;font-size:13px;font-weight:700;color:var(--accent);background:var(--soft);padding:6px 10px;border-radius:6px;display:inline-block;margin-bottom:4px;overflow-wrap:anywhere}
+    .result-list{list-style:none;margin:0;padding:0}
+    .result-list li{padding:10px 14px;border-bottom:1px solid var(--line)}
+    .result-list li:last-child{border-bottom:0}
+    .result-title{font-size:13px;font-weight:720;margin:0 0 3px}
+    .result-snippet{font-size:12px;color:var(--muted);margin:0;line-height:1.4}
+    .result-url{font-size:11px;color:var(--accent);margin:2px 0 0;overflow-wrap:anywhere}
+    .cmd-highlight{font-family:"SFMono-Regular",Consolas,monospace;font-size:13px;background:#1e293b;color:#f8fafc;padding:8px 12px;border-radius:6px;display:block;margin-bottom:4px;white-space:pre-wrap;overflow-wrap:anywhere}
+    .empty{padding:24px;color:var(--muted);line-height:1.6}
+    .toast{position:fixed;right:18px;bottom:18px;border:1px solid var(--strong);border-radius:8px;background:#fff;padding:11px 13px;font-size:13px;font-weight:720;opacity:0;transform:translateY(14px);transition:.18s}
+    .toast.show{opacity:1;transform:none}
+    @media(max-width:1120px){.shell{grid-template-columns:280px 1fr}.panel.detailsPanel{grid-column:1/-1;border-top:1px solid var(--line)}.details{height:auto}}
+    @media(max-width:760px){.shell{display:block}.panel{border-right:0;border-bottom:1px solid var(--line)}.list,.tracebody,.details{height:auto}.metrics,.grid{grid-template-columns:1fr 1fr}.indent1,.indent2,.indent3{margin-left:0;width:100%}}
+  </style>
+</head>
+<body>
+<main class="shell">
+  <aside class="panel">
+    <div class="topbar">
+      <div class="brand">
+        <div class="mark">AR</div>
+        <div><p class="title">Agent Replay</p><p class="sub" id="apiStatus">Loading sessions…</p></div>
+      </div>
+      <button class="iconbtn" id="refresh" title="Refresh">↺</button>
+    </div>
+    <div class="search"><input id="q" placeholder="Search session or task…"></div>
+    <div class="list" id="sessions"></div>
+  </aside>
+
+  <section class="panel">
+    <div class="topbar">
+      <div>
+        <p class="title" id="traceTitle">Session</p>
+        <p class="sub" id="traceSub">Select a session to see its trace</p>
+      </div>
+      <button class="textbtn" id="copyLink">Copy link</button>
+    </div>
+    <div class="metrics" id="metrics"></div>
+    <div class="tabs">
+      <button class="tab active" data-filter="all">All</button>
+      <button class="tab" data-filter="files">Files</button>
+      <button class="tab" data-filter="web_search">Search</button>
+      <button class="tab" data-filter="bash">Bash</button>
+      <button class="tab" data-filter="error">Errors</button>
+    </div>
+    <div class="tracebody" id="trace"></div>
+  </section>
+
+  <section class="panel detailsPanel">
+    <div class="topbar">
+      <div>
+        <p class="title" id="detailTitle">Step details</p>
+        <p class="sub" id="detailSub">Inputs, outputs, timing</p>
+      </div>
+      <button class="iconbtn" id="copyPayload" title="Copy payload">⎘</button>
+    </div>
+    <div class="details" id="details"></div>
+  </section>
+</main>
+<div class="toast" id="toast">Copied</div>
+
+<script>
+const state = { sessions:[], session:null, spanId:null, filter:'all', q:'' };
+const $ = id => document.getElementById(id);
+const cls = s => s==='failed'?'failed':s==='warn'?'warn':'ok';
+const ms = n => n>=1000?`${(n/1000).toFixed(n>=10000?1:2)}s`:`${n||0}ms`;
+const esc = v => String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
+const pretty = v => esc(JSON.stringify(v??{},null,2));
+
+function icoClass(t) {
+  return ['file_read','file_write','file_create','web_search','bash','llm','agent'].includes(t) ? t : '';
+}
+function icoLabel(t) {
+  return {agent:'▶',llm:'LLM',file_read:'READ',file_write:'EDIT',file_create:'NEW',web_search:'WEB',bash:'BASH',tool:'TOOL',terminal:'TERM',error:'!'}[t] || t.slice(0,4).toUpperCase();
+}
+
+function toast(t){$('toast').textContent=t;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),1400)}
+async function copy(t,msg){try{await navigator.clipboard.writeText(t);toast(msg)}catch{toast('Copy unavailable')}}
+
+function children(spans,p){return spans.filter(s=>s.parentId===p)}
+function flat(spans,p=null,d=0){return children(spans,p).flatMap(s=>[{...s,depth:d},...flat(spans,s.id,d+1)])}
+
+async function loadSessions(){
+  try{
+    const r = await fetch('/api/sessions');
+    state.sessions = await r.json();
+    $('apiStatus').textContent = `${state.sessions.length} session${state.sessions.length===1?'':'s'}`;
+    if(!state.session && state.sessions[0]) await loadSession(state.sessions[0].id);
+    else renderSessions();
+  } catch(e) {
+    $('apiStatus').textContent = 'Collector not running';
+    $('sessions').innerHTML = '<div class="empty">Start the collector first:<br><code>python3 collector.py</code><br><br>Then run a demo:<br><code>python3 example_agent.py</code></div>';
+  }
+}
+
+async function loadSession(id){
+  const r = await fetch(`/api/sessions/${encodeURIComponent(id)}`);
+  state.session = await r.json();
+  const bad = state.session.spans.find(s=>s.status==='failed');
+  state.spanId = (bad||state.session.spans[0]||{}).id;
+  render();
+}
+
+function renderSessions(){
+  const q = state.q.toLowerCase();
+  const rows = state.sessions.filter(s=>`${s.id} ${s.title} ${s.user} ${s.status}`.toLowerCase().includes(q));
+  $('sessions').innerHTML = rows.length
+    ? rows.map(s=>`<button class="session ${state.session&&s.id===state.session.id?'active':''}" data-id="${esc(s.id)}">
+        <div class="row"><div><p class="name">${esc(s.title)}</p><p class="meta">${esc(s.user)} · ${esc(s.startedAt)}</p></div>
+        <span class="pill ${cls(s.status)}">${esc(s.status)}</span></div>
+        <p class="meta">${ms(s.durationMs)} · ${s.spanCount} steps</p>
+      </button>`).join('')
+    : '<div class="empty">No sessions match.</div>';
+  $('sessions').querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>loadSession(b.dataset.id));
+}
+
+function renderMetrics(){
+  const s = state.session;
+  $('metrics').innerHTML = [
+    ['Status', `<span class="pill ${cls(s.status)}">${s.status}</span>`],
+    ['Latency', ms(s.durationMs)],
+    ['Steps', s.spanCount],
+    ['Cost', s.cost>0?`$${Number(s.cost).toFixed(4)}`:'—'],
+  ].map(x=>`<div class="metric"><div class="label">${x[0]}</div><div class="value">${x[1]}</div></div>`).join('');
+}
+
+function matchFilter(x){
+  if(state.filter==='all') return true;
+  if(state.filter==='files') return x.type==='file_read'||x.type==='file_write'||x.type==='file_create';
+  if(state.filter==='error') return x.status==='failed';
+  return x.type===state.filter;
+}
+
+function renderTrace(){
+  const s = state.session;
+  if(!s){$('trace').innerHTML='<div class="empty">Select a session.</div>';return;}
+  const spans = flat(s.spans);
+  const filtered = spans.filter(matchFilter);
+  const max = Math.max(1,...s.spans.map(x=>x.durationMs||1));
+  $('trace').innerHTML = filtered.map(x=>`
+    <button class="span indent${Math.min(x.depth,3)} ${x.id===state.spanId?'active':''}" data-id="${esc(x.id)}">
+      <div class="ico ${icoClass(x.type)}">${icoLabel(x.type)}</div>
+      <div>
+        <div class="span-title">
+          <span class="span-name">${esc(x.title)}</span>
+          <span class="pill ${cls(x.status)}">${esc(x.status)}</span>
+        </div>
+        <p class="meta">${esc(x.subtitle||x.type)}</p>
+        <div class="bar"><div class="fill" style="width:${Math.max(4,((x.durationMs||1)/max)*100)}%"></div></div>
+      </div>
+      <div class="time">${ms(x.durationMs)}</div>
+    </button>`).join('') || '<div class="empty">No steps match this filter.</div>';
+  $('trace').querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{state.spanId=b.dataset.id;renderTrace();renderDetails()});
+}
+
+function typeCard(x){
+  const t = x.type;
+  const inp = x.input || {};
+  const out = x.output || {};
+
+  if(t==='file_read'||t==='file_write'||t==='file_create'){
+    const label = {file_read:'Read','file_write':'Wrote','file_create':'Created'}[t] || t;
+    const sizeInfo = out.bytes ? `${out.bytes} bytes · ${out.lines} lines` : '';
+    const preview = out.preview||inp.content||'';
+    return `<div class="card">
+      <header><h2>${label}</h2><span class="pill ${cls(x.status)}">${esc(x.status)}</span></header>
+      <div style="padding:12px 14px">
+        <div class="path-highlight">${esc(inp.path||'')}</div>
+        ${sizeInfo?`<p style="margin:6px 0 0;font-size:12px;color:var(--muted)">${esc(sizeInfo)}</p>`:''}
+        ${preview?`<pre class="code" style="margin-top:10px">${esc(preview.slice(0,1200))}${preview.length>1200?'\n…':''}
+</pre>`:''}
+      </div>
+    </div>`;
+  }
+
+  if(t==='web_search'){
+    const results = out.results || [];
+    return `<div class="card">
+      <header><h2>Web Search</h2><span class="pill ${cls(x.status)}">${esc(x.status)}</span></header>
+      <div style="padding:12px 14px">
+        <div class="path-highlight" style="background:#fdf4ff;color:#7e22ce">${esc(inp.query||'')}</div>
+      </div>
+      ${results.length?`<ul class="result-list">${results.map(r=>`
+        <li>
+          <p class="result-title">${esc(r.title||'')}</p>
+          <p class="result-snippet">${esc(r.snippet||'')}</p>
+          ${r.url?`<p class="result-url">${esc(r.url)}</p>`:''}
+        </li>`).join('')}</ul>`:''}
+    </div>`;
+  }
+
+  if(t==='bash'){
+    const stdout = out.stdout||'';
+    const stderr = out.stderr||'';
+    return `<div class="card">
+      <header><h2>Bash</h2><span class="pill ${cls(x.status)}">${esc(x.status)}</span></header>
+      <div style="padding:12px 14px">
+        <code class="cmd-highlight">${esc(inp.command||'')}</code>
+        ${out.returncode!==undefined?`<p style="margin:4px 0;font-size:12px;color:var(--muted)">exit ${out.returncode}</p>`:''}
+        ${stdout?`<pre class="code" style="margin-top:8px">${esc(stdout.slice(0,2000))}${stdout.length>2000?'\n…':''}
+</pre>`:''}
+        ${stderr?`<pre class="code" style="margin-top:6px;background:#2d1b1b;color:#fca5a5">${esc(stderr.slice(0,800))}</pre>`:''}
+      </div>
+    </div>`;
+  }
+
+  return '';
+}
+
+function renderDetails(){
+  const s = state.session;
+  const x = s && s.spans.find(y=>y.id===state.spanId);
+  if(!x){$('details').innerHTML='<div class="empty">Select a step to see its details.</div>';return;}
+  $('detailTitle').textContent = x.title;
+  $('detailSub').textContent = `${x.type} · ${x.status} · ${ms(x.durationMs)}`;
+
+  $('details').innerHTML = `
+    ${typeCard(x)}
+    <div class="card">
+      <header><h2>Overview</h2></header>
+      <div class="grid">
+        <div class="kv"><div class="label">Type</div><div class="kvv">${esc(x.type)}</div></div>
+        <div class="kv"><div class="label">Status</div><div class="kvv"><span class="pill ${cls(x.status)}">${esc(x.status)}</span></div></div>
+        <div class="kv"><div class="label">Start</div><div class="kvv">+${ms(x.startMs)}</div></div>
+        <div class="kv"><div class="label">Duration</div><div class="kvv">${ms(x.durationMs)}</div></div>
+        <div class="kv"><div class="label">Span ID</div><div class="kvv" style="font-size:11px">${esc(x.id)}</div></div>
+        <div class="kv"><div class="label">Parent</div><div class="kvv" style="font-size:11px">${esc(x.parentId||'—')}</div></div>
+      </div>
+    </div>
+    <div class="card"><header><h2>Input</h2></header><pre class="code">${pretty(x.input)}</pre></div>
+    <div class="card"><header><h2>Output</h2></header><pre class="code">${pretty(x.output)}</pre></div>
+  `;
+}
+
+function render(){
+  const s = state.session;
+  renderSessions();
+  if(!s){renderTrace();return;}
+  $('traceTitle').textContent = s.title;
+  $('traceSub').textContent = `${s.id} · ${s.user} · ${s.startedAt}`;
+  renderMetrics();
+  renderTrace();
+  renderDetails();
+}
+
+$('q').oninput = e => { state.q=e.target.value; renderSessions(); };
+$('refresh').onclick = loadSessions;
+$('copyLink').onclick = () => state.session && copy(`${location.origin}${location.pathname}#${state.session.id}:${state.spanId}`,'Link copied');
+$('copyPayload').onclick = () => {
+  const s=state.session; const x=s&&s.spans.find(y=>y.id===state.spanId);
+  if(x) copy(JSON.stringify({session_id:s.id,span:x},null,2),'Payload copied');
+};
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  state.filter=t.dataset.filter;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
+  renderTrace();
+});
+
+loadSessions();
+</script>
+</body>
+</html>

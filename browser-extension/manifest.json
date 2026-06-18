@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Agent Replay Recorder",
+  "version": "0.1.0",
+  "description": "Records visible AI chat conversations from supported web apps into a local Agent Replay collector.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "http://127.0.0.1:8787/*",
+    "https://claude.ai/*",
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://claude.ai/*", "https://chatgpt.com/*", "https://chat.openai.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
